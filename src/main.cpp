@@ -6,6 +6,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "CLIUTILS/CLI11.hpp"
@@ -520,13 +521,16 @@ getNestedTextValueRunPathsFromArtboard(
                                        ? nested->name()
                                        : currentPath + "/" + nested->name();
 
-            auto nestedResults = getNestedTextValueRunPathsFromArtboard(
-                nested->artboardInstance(),
-                newPath);
-            nestedTextValueRunsInfo.insert(
-                nestedTextValueRunsInfo.end(),
-                nestedResults.begin(),
-                nestedResults.end());
+            auto nestedArtboardInst = nested->artboardInstance();
+            if (nestedArtboardInst) {
+                auto nestedResults = getNestedTextValueRunPathsFromArtboard(
+                    nestedArtboardInst,
+                    newPath);
+                nestedTextValueRunsInfo.insert(
+                    nestedTextValueRunsInfo.end(),
+                    nestedResults.begin(),
+                    nestedResults.end());
+            }
         }
     }
 
@@ -653,21 +657,34 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
     // Track which enums are actually used by non-filtered ViewModels
     std::unordered_set<std::string> usedEnumNames;
 
+    // Create a mapping from original ViewModel ID to ViewModel name
+    // This is needed because when we filter ViewModels, the indices change
+    std::unordered_map<uint32_t, std::string> viewModelIdToName;
+
     // Process view models
     for (size_t i = 0; i < riveFile->viewModelCount(); i++)
     {
         auto viewModel = riveFile->viewModelByIndex(i);
         if (viewModel)
         {
+            std::cout << "Processing ViewModel " << i << ": " << viewModel->name() << std::endl;
+
+            // Store the mapping from original ID to name for all ViewModels
+            viewModelIdToName[i] = viewModel->name();
+
             // Skip view models that start with internal/private/_
             if (!shouldIncludeElement(viewModel->name(), ignorePrivate))
             {
+                std::cout << "  Skipping ViewModel (private): " << viewModel->name() << std::endl;
                 continue;
             }
 
+            std::cout << "  Including ViewModel: " << viewModel->name() << std::endl;
             ViewModelInfo viewModelInfo;
             viewModelInfo.name = viewModel->name();
+            std::cout << "  Getting properties..." << std::endl;
             auto propertiesData = viewModel->properties();
+            std::cout << "  Found " << propertiesData.size() << " properties" << std::endl;
             for (const auto& property : propertiesData)
             {
                 // Skip properties that start with internal/private/_
@@ -679,10 +696,29 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
                 if (property.type == rive::DataType::viewModel)
                 {
                     // TODO: this is a hack
-                    auto nestedViewModel =
-                        viewModel->createInstance()->propertyViewModel(
-                            property.name);
-                    auto vm = nestedViewModel->instance()->viewModel();
+                    auto vmInstance = viewModel->createInstance();
+                    if (!vmInstance) {
+                        std::cerr << "Warning: Failed to create instance for ViewModel: " << viewModel->name() << std::endl;
+                        continue;
+                    }
+
+                    auto nestedViewModel = vmInstance->propertyViewModel(property.name);
+                    if (!nestedViewModel) {
+                        std::cerr << "Warning: Failed to get property ViewModel: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto nestedInstance = nestedViewModel->instance();
+                    if (!nestedInstance) {
+                        std::cerr << "Warning: Failed to get nested ViewModel instance for: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto vm = nestedInstance->viewModel();
+                    if (!vm) {
+                        std::cerr << "Warning: Failed to get nested ViewModel for: " << property.name << std::endl;
+                        continue;
+                    }
 
                     // Skip nested ViewModels that have private names
                     if (!shouldIncludeElement(vm->name(), ignorePrivate))
@@ -699,21 +735,49 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
                 else if (property.type == rive::DataType::enumType)
                 {
                     // TODO: this is a hack
-                    auto vmi =
-                        riveFile->createViewModelInstance(viewModel->name());
-                    auto enum_instance =
-                        static_cast<rive::ViewModelInstanceEnum*>(
-                            vmi->propertyValue(property.name));
-                    auto enumProperty = enum_instance->viewModelProperty()
-                                            ->as<rive::ViewModelPropertyEnum>();
-                    auto enumName = enumProperty->dataEnum()->enumName();
+                    auto vmi = riveFile->createViewModelInstance(viewModel->name());
+                    if (!vmi) {
+                        std::cerr << "Warning: Failed to create ViewModel instance for: " << viewModel->name() << std::endl;
+                        continue;
+                    }
+
+                    auto propertyValue = vmi->propertyValue(property.name);
+                    if (!propertyValue) {
+                        std::cerr << "Warning: Failed to get property value for: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto enum_instance = static_cast<rive::ViewModelInstanceEnum*>(propertyValue);
+                    if (!enum_instance) {
+                        std::cerr << "Warning: Failed to cast to ViewModelInstanceEnum for: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto vmProperty = enum_instance->viewModelProperty();
+                    if (!vmProperty) {
+                        std::cerr << "Warning: Failed to get viewModelProperty for: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto enumProperty = vmProperty->as<rive::ViewModelPropertyEnum>();
+                    if (!enumProperty) {
+                        std::cerr << "Warning: Failed to cast to ViewModelPropertyEnum for: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto dataEnum = enumProperty->dataEnum();
+                    if (!dataEnum) {
+                        std::cerr << "Warning: Failed to get dataEnum for: " << property.name << std::endl;
+                        continue;
+                    }
+
+                    auto enumName = dataEnum->enumName();
 
                     // Track that this enum is used by a non-filtered ViewModel
                     usedEnumNames.insert(enumName);
 
                     // Get the default value from the enum instance
                     uint32_t defaultIndex = enum_instance->propertyValue();
-                    auto dataEnum = enumProperty->dataEnum();
                     std::string defaultValue = "";
                     if (defaultIndex < dataEnum->values().size()) {
                         defaultValue = dataEnum->values()[defaultIndex]->key();
@@ -729,32 +793,53 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
                 {
                     // Get default values for other property types
                     auto vmi = riveFile->createViewModelInstance(viewModel->name());
+                    if (!vmi) {
+                        std::cerr << "Warning: Failed to create ViewModel instance for: " << viewModel->name() << std::endl;
+                        continue;
+                    }
+
                     std::string defaultValue = "";
 
                     if (property.type == rive::DataType::boolean) {
-                        auto bool_instance = static_cast<rive::ViewModelInstanceBoolean*>(
-                            vmi->propertyValue(property.name));
-                        defaultValue = bool_instance->propertyValue() ? "true" : "false";
+                        auto propertyValue = vmi->propertyValue(property.name);
+                        if (propertyValue) {
+                            auto bool_instance = static_cast<rive::ViewModelInstanceBoolean*>(propertyValue);
+                            if (bool_instance) {
+                                defaultValue = bool_instance->propertyValue() ? "true" : "false";
+                            }
+                        }
                     }
                     else if (property.type == rive::DataType::number) {
-                        auto number_instance = static_cast<rive::ViewModelInstanceNumber*>(
-                            vmi->propertyValue(property.name));
-                        defaultValue = std::to_string(number_instance->propertyValue());
+                        auto propertyValue = vmi->propertyValue(property.name);
+                        if (propertyValue) {
+                            auto number_instance = static_cast<rive::ViewModelInstanceNumber*>(propertyValue);
+                            if (number_instance) {
+                                defaultValue = std::to_string(number_instance->propertyValue());
+                            }
+                        }
                     }
                     else if (property.type == rive::DataType::string) {
-                        auto string_instance = static_cast<rive::ViewModelInstanceString*>(
-                            vmi->propertyValue(property.name));
-                        defaultValue = string_instance->propertyValue();
+                        auto propertyValue = vmi->propertyValue(property.name);
+                        if (propertyValue) {
+                            auto string_instance = static_cast<rive::ViewModelInstanceString*>(propertyValue);
+                            if (string_instance) {
+                                defaultValue = string_instance->propertyValue();
+                            }
+                        }
                     }
                     else if (property.type == rive::DataType::color) {
-                        auto color_instance = static_cast<rive::ViewModelInstanceColor*>(
-                            vmi->propertyValue(property.name));
-                        int colorValue = color_instance->propertyValue();
-                        // Format as hex string (0xAARRGGBB)
-                        std::stringstream ss;
-                        ss << "0x" << std::hex << std::uppercase << std::setfill('0')
-                           << std::setw(8) << static_cast<unsigned int>(colorValue);
-                        defaultValue = ss.str();
+                        auto propertyValue = vmi->propertyValue(property.name);
+                        if (propertyValue) {
+                            auto color_instance = static_cast<rive::ViewModelInstanceColor*>(propertyValue);
+                            if (color_instance) {
+                                int colorValue = color_instance->propertyValue();
+                                // Format as hex string (0xAARRGGBB)
+                                std::stringstream ss;
+                                ss << "0x" << std::hex << std::uppercase << std::setfill('0')
+                                   << std::setw(8) << static_cast<unsigned int>(colorValue);
+                                defaultValue = ss.str();
+                            }
+                        }
                     }
                     else if (property.type == rive::DataType::assetImage) {
                         // Image properties don't have extractable default values
@@ -767,8 +852,11 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
                 }
             }
             fileData.viewmodels.push_back(viewModelInfo);
+            std::cout << "  Finished processing ViewModel: " << viewModel->name() << std::endl;
         }
     }
+
+    std::cout << "Finished processing all ViewModels. Total included: " << fileData.viewmodels.size() << std::endl;
 
     // Filter enums to only include those used by non-filtered ViewModels
     // If ignorePrivate is enabled and we have ViewModels, only keep enums that are actually used
@@ -786,37 +874,51 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
         fileData.enums = filteredEnums;
     }
 
+    std::cout << "Extracting default relationship chain..." << std::endl;
+
     // Extract default relationship chain
     auto defaultArtboard = riveFile->artboard(); // First artboard is default
     fileData.hasDefaults = (defaultArtboard != nullptr);
-    
+
     if (fileData.hasDefaults) {
         fileData.defaultArtboardName = defaultArtboard->name();
-        
+        std::cout << "  Default artboard: " << fileData.defaultArtboardName << std::endl;
+
         // Get default state machine for the default artboard
-        auto defaultStateMachineInstance = defaultArtboard->instance()->defaultStateMachine();
-        if (defaultStateMachineInstance) {
-            fileData.defaultStateMachineName = defaultStateMachineInstance->name();
+        auto defaultArtboardInstance = defaultArtboard->instance();
+        if (defaultArtboardInstance) {
+            auto defaultStateMachineInstance = defaultArtboardInstance->defaultStateMachine();
+            if (defaultStateMachineInstance) {
+                fileData.defaultStateMachineName = defaultStateMachineInstance->name();
+                std::cout << "  Default state machine: " << fileData.defaultStateMachineName << std::endl;
+            }
         }
-        
+
         // Get default viewmodel for the default artboard
         auto defaultViewModelRuntime = riveFile->defaultArtboardViewModel(defaultArtboard);
         if (defaultViewModelRuntime) {
             fileData.defaultViewModelName = defaultViewModelRuntime->name();
+            std::cout << "  Default ViewModel: " << fileData.defaultViewModelName << std::endl;
         }
     }
+
+    std::cout << "Processing artboards..." << std::endl;
 
     std::unordered_set<std::string> usedArtboardNames;
 
     auto artboardCount = riveFile->artboardCount();
+    std::cout << "Total artboard count: " << artboardCount << std::endl;
+
     for (int i = 0; i < artboardCount; i++)
     {
         auto artboard = riveFile->artboardAt(i);
         std::string artboardName = artboard->name();
+        std::cout << "Processing artboard " << i << ": " << artboardName << std::endl;
 
         // Skip artboards that start with internal/private/_
         if (!shouldIncludeElement(artboardName, ignorePrivate))
         {
+            std::cout << "  Skipping artboard (private): " << artboardName << std::endl;
             continue;
         }
 
@@ -829,22 +931,38 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
         artboardCameCase =
             makeUnique(artboardCameCase, usedArtboardNames);
 
+        std::cout << "  Getting animations..." << std::endl;
         std::vector<std::string> animations =
             getAnimationsFromArtboard(artboard.get(), ignorePrivate);
+        std::cout << "  Getting state machines..." << std::endl;
         std::vector<std::pair<std::string, std::vector<InputInfo>>>
             stateMachines = getStateMachinesFromArtboard(artboard.get(), ignorePrivate);
+        std::cout << "  Getting text value runs..." << std::endl;
         std::vector<TextValueRunInfo> textValueRuns =
             getTextValueRunsFromArtboard(artboard.get());
+        std::cout << "  Getting nested text value runs..." << std::endl;
         std::vector<NestedTextValueRunInfo> nestedTextValueRuns =
             getNestedTextValueRunPathsFromArtboard(artboard.get());
+        std::cout << "  Done getting artboard data" << std::endl;
 
         // Extract relationship information for this artboard
         bool isDefault = (i == 0); // First artboard is default
         uint32_t artboardViewModelId = artboard->viewModelId();
-        bool hasViewModel = (artboardViewModelId < fileData.viewmodels.size());
+
+        // Look up the ViewModel name from the original ID
         std::string viewModelName = "";
-        if (hasViewModel) {
-            viewModelName = fileData.viewmodels[artboardViewModelId].name;
+        bool hasViewModel = false;
+        auto vmIt = viewModelIdToName.find(artboardViewModelId);
+        if (vmIt != viewModelIdToName.end()) {
+            viewModelName = vmIt->second;
+            // Check if this ViewModel was included (not filtered out)
+            // Only mark hasViewModel as true if the ViewModel is in the final list
+            for (const auto& vm : fileData.viewmodels) {
+                if (vm.name == viewModelName) {
+                    hasViewModel = true;
+                    break;
+                }
+            }
         }
         
         // Get default state machine for this artboard
