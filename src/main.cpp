@@ -1028,7 +1028,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
         riveFileData["riv_camel_case"] = fileData.rivCameCase;
         riveFileData["riv_snake_case"] = fileData.riveSnakeCase;
         riveFileData["riv_kebab_case"] = fileData.rivKebabCase;
-        riveFileData["last"] = (fileIndex == riveFileDataList.size() - 1);
 
         // Add default relationship chain
         riveFileData["has_defaults"] = fileData.hasDefaults;
@@ -1048,7 +1047,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
             enumData["enum_pascal_case"] = toPascalCase(enumInfo.name);
             enumData["enum_snake_case"] = toSnakeCase(enumInfo.name);
             enumData["enum_kebab_case"] = toKebabCase(enumInfo.name);
-            enumData["last"] = (enumIndex == fileData.enums.size() - 1);
 
             nlohmann::json enumValues = nlohmann::json::array();
             for (size_t valueIndex = 0; valueIndex < enumInfo.values.size(); valueIndex++)
@@ -1065,7 +1063,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                 {
                     valueData["enum_value_needs_explicit_value"] = true;
                 }
-                valueData["last"] = (valueIndex == enumInfo.values.size() - 1);
                 enumValues.push_back(valueData);
             }
             enumData["enum_values"] = enumValues;
@@ -1084,8 +1081,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
             viewmodelData["view_model_pascal_case"] = toPascalCase(viewModel.name);
             viewmodelData["view_model_snake_case"] = toSnakeCase(viewModel.name);
             viewmodelData["view_model_kebab_case"] = toKebabCase(viewModel.name);
-            viewmodelData["last"] = (vmIndex == fileData.viewmodels.size() - 1);
-            viewmodelData["is_first"] = (vmIndex == 0);
 
             nlohmann::json properties = nlohmann::json::array();
             for (size_t propIndex = 0; propIndex < viewModel.properties.size(); propIndex++)
@@ -1127,7 +1122,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                 }
 
                 propertyData["property_type"] = propertyTypeData;
-                propertyData["last"] = (propIndex == viewModel.properties.size() - 1);
                 properties.push_back(propertyData);
             }
             viewmodelData["properties"] = properties;
@@ -1150,7 +1144,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
             assetData["asset_id"] = asset.assetId;
             assetData["asset_cdn_uuid"] = asset.cdnUuid;
             assetData["asset_cdn_base_url"] = asset.cdnBaseUrl;
-            assetData["last"] = (assetIndex == fileData.assets.size() - 1);
             assets.push_back(assetData);
         }
         riveFileData["assets"] = assets;
@@ -1166,15 +1159,11 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
             artboardData["artboard_camel_case"] = artboard.artboardCameCase;
             artboardData["artboard_snake_case"] = artboard.artboardSnakeCase;
             artboardData["artboard_kebab_case"] = artboard.artboardKebabCase;
-            artboardData["last"] = (artboardIndex == fileData.artboards.size() - 1);
 
             // Add relationship information
-            artboardData["is_default"] = artboard.isDefault;
             artboardData["view_model_id"] = static_cast<int>(artboard.viewModelId);
             artboardData["view_model_name"] = artboard.viewModelName;
-            artboardData["has_view_model"] = artboard.hasViewModel;
             artboardData["default_state_machine_name"] = artboard.defaultStateMachineName;
-            artboardData["has_default_state_machine"] = artboard.hasDefaultStateMachine;
 
             // Add animations
             std::unordered_set<std::string> usedAnimationNames;
@@ -1189,7 +1178,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                 animData["animation_pascal_case"] = toPascalCase(uniqueName);
                 animData["animation_snake_case"] = toSnakeCase(uniqueName);
                 animData["animation_kebab_case"] = toKebabCase(uniqueName);
-                animData["last"] = (animIndex == artboard.animations.size() - 1);
                 animations.push_back(animData);
             }
             artboardData["animations"] = animations;
@@ -1207,7 +1195,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                 stateMachineData["state_machine_pascal_case"] = toPascalCase(uniqueName);
                 stateMachineData["state_machine_snake_case"] = toSnakeCase(uniqueName);
                 stateMachineData["state_machine_kebab_case"] = toKebabCase(uniqueName);
-                stateMachineData["last"] = (smIndex == artboard.stateMachines.size() - 1);
 
                 // Add inputs
                 std::unordered_set<std::string> usedInputNames;
@@ -1224,7 +1211,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                     inputData["input_kebab_case"] = toKebabCase(uniqueName);
                     inputData["input_type"] = input.type;
                     inputData["input_default_value"] = input.defaultValue;
-                    inputData["last"] = (inputIndex == stateMachine.second.size() - 1);
                     inputs.push_back(inputData);
                 }
                 stateMachineData["inputs"] = inputs;
@@ -1247,7 +1233,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                 tvrData["text_value_run_kebab_case"] = toKebabCase(uniqueName);
                 tvrData["text_value_run_default"] = tvr.defaultValue;
                 tvrData["text_value_run_default_sanitized"] = sanitizeString(tvr.defaultValue);
-                tvrData["last"] = (tvrIndex == artboard.textValueRuns.size() - 1);
                 textValueRuns.push_back(tvrData);
             }
             artboardData["text_value_runs"] = textValueRuns;
@@ -1260,7 +1245,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
                 nlohmann::json ntvrData;
                 ntvrData["nested_text_value_run_name"] = ntvr.name;
                 ntvrData["nested_text_value_run_path"] = ntvr.path;
-                ntvrData["last"] = (ntvrIndex == artboard.nestedTextValueRuns.size() - 1);
                 nestedTextValueRuns.push_back(ntvrData);
             }
             artboardData["nested_text_value_runs"] = nestedTextValueRuns;
@@ -1289,7 +1273,6 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
         riveFileData["has_metadata"] = hasMetadata;
 
         bool hasViewModel = !fileData.viewmodels.empty();
-        riveFileData["has_view_model"] = hasViewModel;
 
         bool hasTypeSafeSwitching = fileData.artboards.size() > 1 ||
                                      (!hasViewModel && totalStateMachines == 0 && totalAnimations > 1) ||
@@ -1397,8 +1380,6 @@ int main(int argc, char* argv[])
         }
         // If result is nullopt, the error has already been printed
     }
-
-    // Mustache template rendering
     kainjow::mustache::data templateData;
     std::vector<kainjow::mustache::data> riveFileList;
 
@@ -1407,19 +1388,11 @@ int main(int argc, char* argv[])
     {
         const auto& fileData = riveFileDataList[fileIndex];
         kainjow::mustache::data riveFileData;
-        riveFileData["riv_original_file_name"] = fileData.rivOriginalFileName;
         riveFileData["riv_pascal_case"] = fileData.rivPascalCase;
         riveFileData["riv_camel_case"] = fileData.rivCameCase;
         riveFileData["riv_snake_case"] = fileData.riveSnakeCase;
         riveFileData["riv_kebab_case"] = fileData.rivKebabCase;
         riveFileData["last"] = (fileIndex == riveFileDataList.size() - 1);
-        
-        // Add default relationship chain
-        riveFileData["has_defaults"] = fileData.hasDefaults;
-        riveFileData["default_artboard_name"] = fileData.defaultArtboardName;
-        riveFileData["default_artboard_camel_case"] = toCamelCase(fileData.defaultArtboardName);
-        riveFileData["default_state_machine_name"] = fileData.defaultStateMachineName;
-        riveFileData["default_view_model_name"] = fileData.defaultViewModelName;
 
         // Add enums to template data
         std::vector<kainjow::mustache::data> enums;
@@ -1433,7 +1406,6 @@ int main(int argc, char* argv[])
             enumData["enum_pascal_case"] = toPascalCase(enumInfo.name);
             enumData["enum_snake_case"] = toSnakeCase(enumInfo.name);
             enumData["enum_kebab_case"] = toKebabCase(enumInfo.name);
-            enumData["last"] = (enumIndex == fileData.enums.size() - 1);
 
             std::vector<kainjow::mustache::data> enumValues;
             for (size_t valueIndex = 0; valueIndex < enumInfo.values.size();
@@ -1441,16 +1413,11 @@ int main(int argc, char* argv[])
             {
                 const auto& value = enumInfo.values[valueIndex];
                 kainjow::mustache::data valueData;
-                const auto enumValueCamel = toCamelCase(value.key);
                 valueData["enum_value_key"] = value.key;
-                valueData["enum_value_camel_case"] = enumValueCamel;
+                valueData["enum_value_camel_case"] = toCamelCase(value.key);
                 valueData["enum_value_pascal_case"] = toPascalCase(value.key);
                 valueData["enum_value_snake_case"] = toSnakeCase(value.key);
                 valueData["enum_value_kebab_case"] = toKebabCase(value.key);
-                if (value.key != enumValueCamel)
-                {
-                    valueData["enum_value_needs_explicit_value"] = true;
-                }
                 valueData["last"] =
                     (valueIndex == enumInfo.values.size() - 1);
                 enumValues.push_back(valueData);
@@ -1478,7 +1445,6 @@ int main(int argc, char* argv[])
                 toKebabCase(viewModel.name);
             viewmodelData["last"] =
                 (vmIndex == fileData.viewmodels.size() - 1);
-            viewmodelData["is_first"] = (vmIndex == 0);
 
             std::vector<kainjow::mustache::data> properties;
             for (size_t propIndex = 0;
@@ -1511,7 +1477,6 @@ int main(int argc, char* argv[])
                                        property.type == "boolean");
                 propertyTypeData.set("is_color", property.type == "color");
                 propertyTypeData.set("is_list", property.type == "list");
-                propertyTypeData.set("is_image", property.type == "image" || property.type == "assetImage");
                 propertyTypeData.set("is_trigger",
                                        property.type == "trigger");
                 propertyTypeData.set("backing_name", property.backingName);
@@ -1523,18 +1488,6 @@ int main(int argc, char* argv[])
                                        toSnakeCase(property.backingName));
                 propertyTypeData.set("backing_kebab_case",
                                        toKebabCase(property.backingName));
-
-                // Add default values for properties
-                if (!property.defaultValue.empty()) {
-                    propertyTypeData.set("default_value", property.defaultValue);
-
-                    if (property.type == "enum") {
-                        propertyTypeData.set("enum_default_value", property.defaultValue);
-                        propertyTypeData.set("enum_default_value_camel",
-                                               toCamelCase(property.defaultValue));
-                    }
-                }
-
                 propertyData.set("property_type", propertyTypeData);
 
                 propertyData["last"] =
@@ -1561,7 +1514,6 @@ int main(int argc, char* argv[])
             assetData["asset_id"] = asset.assetId;
             assetData["asset_cdn_uuid"] = asset.cdnUuid;
             assetData["asset_cdn_base_url"] = asset.cdnBaseUrl;
-            assetData["last"] = (assetIndex == fileData.assets.size() - 1);
             assets.push_back(assetData);
         }
         riveFileData["assets"] = assets;
@@ -1581,14 +1533,6 @@ int main(int argc, char* argv[])
             artboardData["artboard_kebab_case"] = artboard.artboardKebabCase;
             artboardData["last"] =
                 (artboardIndex == fileData.artboards.size() - 1);
-            
-            // Add relationship information
-            artboardData["is_default"] = artboard.isDefault;
-            artboardData["view_model_id"] = static_cast<int>(artboard.viewModelId);
-            artboardData["view_model_name"] = artboard.viewModelName;
-            artboardData["has_view_model"] = artboard.hasViewModel;
-            artboardData["default_state_machine_name"] = artboard.defaultStateMachineName;
-            artboardData["has_default_state_machine"] = artboard.hasDefaultStateMachine;
 
             std::unordered_set<std::string> usedAnimationNames;
             std::vector<kainjow::mustache::data> animations;
@@ -1703,42 +1647,6 @@ int main(int argc, char* argv[])
         }
 
         riveFileData["artboards"] = artboardList;
-
-        // Add count flags for conditional generation
-        riveFileData["artboard_count"] = fileData.artboards.size();
-        riveFileData["has_multiple_artboards"] = fileData.artboards.size() > 1;
-
-        // Count total animations and state machines across all artboards
-        size_t totalAnimations = 0;
-        size_t totalStateMachines = 0;
-        for (const auto& artboard : fileData.artboards) {
-            totalAnimations += artboard.animations.size();
-            totalStateMachines += artboard.stateMachines.size();
-        }
-        riveFileData["total_animation_count"] = totalAnimations;
-        riveFileData["has_multiple_animations"] = totalAnimations > 1;
-        riveFileData["total_state_machine_count"] = totalStateMachines;
-        riveFileData["has_state_machines"] = totalStateMachines > 0;
-        riveFileData["has_multiple_state_machines"] = totalStateMachines > 1;
-
-        // Add metadata flag - show metadata if there are multiples of any type
-        bool hasMetadata = fileData.artboards.size() > 1 || totalAnimations > 1 || totalStateMachines > 1;
-        riveFileData["has_metadata"] = hasMetadata;
-
-        // Add view model existence flag
-        bool hasViewModel = !fileData.viewmodels.empty();
-        riveFileData["has_view_model"] = hasViewModel;
-
-        // Add type-safe switching flag - show type-safe methods only if there will be actual methods
-        // Methods are shown when:
-        // - switchArtboard: has_multiple_artboards
-        // - playAnimation: !has_view_model && !has_state_machines && has_multiple_animations
-        // - switchStateMachine: has_multiple_state_machines
-        bool hasTypeSafeSwitching = fileData.artboards.size() > 1 ||
-                                     (!hasViewModel && totalStateMachines == 0 && totalAnimations > 1) ||
-                                     totalStateMachines > 1;
-        riveFileData["has_type_safe_switching"] = hasTypeSafeSwitching;
-
         riveFileList.push_back(riveFileData);
     }
 
