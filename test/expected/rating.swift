@@ -26,33 +26,32 @@
 // └─ View Models
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - Rating ViewModel
 
 /// View model for rating.riv (no data binding)
 @MainActor
-public final class RiveRatingViewModel: WDSRiveViewModel {
+public final class RiveRatingViewModel: RiveViewModel {
+
     // MARK: - MetaData
 
+    /// Metadata for rating.riv
     public struct MetaData {
 
+        /// The Rive file name
         public static let fileName = "rating"
 
     }
-// MARK: - Initializer
+    // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil
     ) {
         super.init(
@@ -60,7 +59,6 @@ public final class RiveRatingViewModel: WDSRiveViewModel {
                 fileName: "rating",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module

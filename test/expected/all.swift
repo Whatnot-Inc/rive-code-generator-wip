@@ -23,22 +23,22 @@
 // └─ View Models
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - TextRuns ViewModel
 
 /// View model for textRuns.riv (no data binding)
 @MainActor
-public final class RiveTextRunsViewModel: WDSRiveViewModel {
+public final class RiveTextRunsViewModel: RiveViewModel {
+
     // MARK: - MetaData
 
+    /// Metadata for textRuns.riv
     public struct MetaData {
 
+        /// The Rive file name
         public static let fileName = "text_runs"
 
         // MARK: - Artboards
@@ -57,17 +57,15 @@ public final class RiveTextRunsViewModel: WDSRiveViewModel {
             public static let explicitDefault: Artboard = .artboardNr1
         }
 
-        }
 
     }
-// MARK: - Initializer
+    // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil
     ) {
         super.init(
@@ -75,7 +73,6 @@ public final class RiveTextRunsViewModel: WDSRiveViewModel {
                 fileName: "text_runs",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module
@@ -123,22 +120,22 @@ public extension RiveTextRunsViewModel {
 // └─ View Models
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - NestedText ViewModel
 
 /// View model for nestedText.riv (no data binding)
 @MainActor
-public final class RiveNestedTextViewModel: WDSRiveViewModel {
+public final class RiveNestedTextViewModel: RiveViewModel {
+
     // MARK: - MetaData
 
+    /// Metadata for nestedText.riv
     public struct MetaData {
 
+        /// The Rive file name
         public static let fileName = "nested_text"
 
         // MARK: - Artboards
@@ -161,17 +158,15 @@ public final class RiveNestedTextViewModel: WDSRiveViewModel {
             public static let explicitDefault: Artboard = .artboard1
         }
 
-        }
 
     }
-// MARK: - Initializer
+    // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil
     ) {
         super.init(
@@ -179,7 +174,6 @@ public final class RiveNestedTextViewModel: WDSRiveViewModel {
                 fileName: "nested_text",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module
@@ -296,12 +290,9 @@ public extension RiveNestedTextViewModel {
 //    │  ├─ Item_Selection: ItemSelectionEnum = .coin
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - Rewards ViewModel
 
@@ -319,7 +310,7 @@ import WNStorage
 /// viewModel.play()
 /// ```
 @MainActor
-public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewardsViewModel.Properties> {
+public final class RiveRewardsViewModel: RiveViewModel {
 
     // MARK: - MetaData
 
@@ -359,7 +350,7 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
     }
     // MARK: - Properties
 
-    public struct Properties: WDSRiveDataBindingProperties {
+    public struct Properties: RiveDataBindingProperties {
 
         public init() {}
 
@@ -385,7 +376,7 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
 
         // MARK: - EnergyBar Nested Properties
 
-        public struct EnergyBarProperties: WDSRiveDataBindingProperties {
+        public struct EnergyBarProperties: RiveDataBindingProperties {
 
             public init() {}
 @ColorProperty("Bar_Color") public var Bar_Color: UIColor?
@@ -395,7 +386,7 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
 
         // MARK: - Rewards Nested Properties
 
-        public struct RewardsProperties: WDSRiveDataBindingProperties {
+        public struct RewardsProperties: RiveDataBindingProperties {
 
             public init() {}
 @NumberProperty("Price_Value") public var Price_Value: Float?
@@ -412,7 +403,7 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
 
         // MARK: - Button Nested Properties
 
-        public struct ButtonProperties: WDSRiveDataBindingProperties {
+        public struct ButtonProperties: RiveDataBindingProperties {
 
             public init() {}
 @StringProperty("State_1") public var State_1: String?
@@ -423,7 +414,7 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
 
         // MARK: - Item Nested Properties
 
-        public struct ItemProperties: WDSRiveDataBindingProperties {
+        public struct ItemProperties: RiveDataBindingProperties {
 
             public init() {}
 @EnumProperty<ItemSelectionEnum>("Item_Selection") public var Item_Selection: ItemSelectionEnum?
@@ -433,16 +424,15 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
 @TriggerProperty("Icon_React") public var Icon_React: TriggerProperty
 @ViewModelProperty<ItemProperties>("Property_Of_Item") public var Property_Of_Item: ViewModelProperty<ItemProperties>
 @NumberProperty("Item_Value") public var Item_Value: Float?
-}
+    }
 
     // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil,
         properties: Properties = Properties()
     ) {
@@ -451,7 +441,6 @@ public final class RiveRewardsViewModel: WDSRiveDataBindingViewModel<RiveRewards
                 fileName: "rewards",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module
@@ -503,12 +492,9 @@ public extension RiveRewardsViewModel {
 //    │  ├─ name: String = ""
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - DbGenerator ViewModel
 
@@ -526,11 +512,11 @@ import WNStorage
 /// viewModel.play()
 /// ```
 @MainActor
-public final class RiveDbGeneratorViewModel: WDSRiveDataBindingViewModel<RiveDbGeneratorViewModel.Properties> {
+public final class RiveDbGeneratorViewModel: RiveViewModel {
 
     // MARK: - Properties
 
-    public struct Properties: WDSRiveDataBindingProperties {
+    public struct Properties: RiveDataBindingProperties {
 
         public init() {}
 
@@ -565,7 +551,7 @@ public final class RiveDbGeneratorViewModel: WDSRiveDataBindingViewModel<RiveDbG
 
         // MARK: - Person Nested Properties
 
-        public struct PersonProperties: WDSRiveDataBindingProperties {
+        public struct PersonProperties: RiveDataBindingProperties {
 
             public init() {}
 @ViewModelProperty<PetProperties>("my_pet") public var my_pet: ViewModelProperty<PetProperties>
@@ -580,16 +566,15 @@ public final class RiveDbGeneratorViewModel: WDSRiveDataBindingViewModel<RiveDbG
 @EnumProperty<PetEnum>("pet_type") public var pet_type: PetEnum?
 @StringProperty("name") public var name: String?
 @NumberProperty("age") public var age: Float?
-}
+    }
 
     // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil,
         properties: Properties = Properties()
     ) {
@@ -598,7 +583,6 @@ public final class RiveDbGeneratorViewModel: WDSRiveDataBindingViewModel<RiveDbG
                 fileName: "db_generator",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module
@@ -635,33 +619,32 @@ public final class RiveDbGeneratorViewModel: WDSRiveDataBindingViewModel<RiveDbG
 // └─ View Models
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - Rating ViewModel
 
 /// View model for rating.riv (no data binding)
 @MainActor
-public final class RiveRatingViewModel: WDSRiveViewModel {
+public final class RiveRatingViewModel: RiveViewModel {
+
     // MARK: - MetaData
 
+    /// Metadata for rating.riv
     public struct MetaData {
 
+        /// The Rive file name
         public static let fileName = "rating"
 
     }
-// MARK: - Initializer
+    // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil
     ) {
         super.init(
@@ -669,7 +652,6 @@ public final class RiveRatingViewModel: WDSRiveViewModel {
                 fileName: "rating",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module
@@ -699,26 +681,22 @@ public final class RiveRatingViewModel: WDSRiveViewModel {
 // └─ View Models
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - FileAssets ViewModel
 
 /// View model for fileAssets.riv (no data binding)
 @MainActor
-public final class RiveFileAssetsViewModel: WDSRiveViewModel {
-// MARK: - Initializer
+public final class RiveFileAssetsViewModel: RiveViewModel {
+    // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil
     ) {
         super.init(
@@ -726,7 +704,6 @@ public final class RiveFileAssetsViewModel: WDSRiveViewModel {
                 fileName: "file_assets",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module
@@ -759,33 +736,32 @@ public final class RiveFileAssetsViewModel: WDSRiveViewModel {
 // └─ View Models
 //
 
-import DependencyInjection
+
 import RiveRuntime
 import SwiftUI
-import UIKit
-import WDSKit
-import WNStorage
 
 // MARK: - LittleMachine ViewModel
 
 /// View model for littleMachine.riv (no data binding)
 @MainActor
-public final class RiveLittleMachineViewModel: WDSRiveViewModel {
+public final class RiveLittleMachineViewModel: RiveViewModel {
+
     // MARK: - MetaData
 
+    /// Metadata for littleMachine.riv
     public struct MetaData {
 
+        /// The Rive file name
         public static let fileName = "little_machine"
 
     }
-// MARK: - Initializer
+    // MARK: - Initializer
 
     public init(
         autoPlay: Bool = false,
         loadCdn: Bool = false,
-        assetLoader: RiveAssetLoader? = FontOnlyAssetLoader(),
-        fit: WDSRiveFit = .contain,
-        alignment: WDSRiveAlignment = .center,
+        fit: RiveFit = .contain,
+        alignment: RiveAlignment = .center,
         bundle: Bundle? = nil
     ) {
         super.init(
@@ -793,7 +769,6 @@ public final class RiveLittleMachineViewModel: WDSRiveViewModel {
                 fileName: "little_machine",
                 autoPlay: autoPlay,
                 loadCdn: loadCdn,
-                assetLoader: assetLoader,
                 fit: fit,
                 alignment: alignment,
                 bundle: bundle ?? .module

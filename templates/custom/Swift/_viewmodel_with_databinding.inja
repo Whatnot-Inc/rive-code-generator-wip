@@ -13,7 +13,7 @@
 /// viewModel.play()
 /// ```
 @MainActor
-public final class Rive{{ file.riv_pascal_case }}ViewModel: RiveDataBindingViewModel<Rive{{ file.riv_pascal_case }}ViewModel.Properties> {
+public final class Rive{{ file.riv_pascal_case }}ViewModel: RiveViewModel {
   {% include "_metadata.inja" %}
   {% if not file.has_metadata %}
 
