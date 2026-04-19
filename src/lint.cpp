@@ -18,6 +18,11 @@ std::vector<LintViolation> runLint(const std::vector<RiveFileData>& files,
             if (asset.type != "image")
                 continue;
 
+            // Only lint embedded assets — referenced and CDN-hosted assets
+            // are loaded at runtime by the app and are not our concern.
+            if (asset.embeddedByteSize == 0)
+                continue;
+
             // Format check
             const auto& ext = asset.fileExtension;
             bool allowed = std::find(config.allowedExtensions.begin(),
@@ -31,8 +36,8 @@ std::vector<LintViolation> runLint(const std::vector<RiveFileData>& files,
                                       ext});
             }
 
-            // Size check — only for embedded assets with a known size
-            if (asset.embeddedByteSize > 0 && asset.embeddedByteSize > config.maxAssetBytes)
+            // Size check
+            if (asset.embeddedByteSize > config.maxAssetBytes)
             {
                 violations.push_back({LintViolation::Type::OversizedAsset,
                                       fileData.rivOriginalFileName,
