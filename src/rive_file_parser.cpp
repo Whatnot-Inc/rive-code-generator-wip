@@ -59,7 +59,7 @@ std::vector<std::string> findRiveFiles(const std::string& path)
 // File loading
 // ---------------------------------------------------------------------------
 
-rive::rcp<rive::File> openFile(const char name[], rive::Factory& factory)
+rive::rcp<rive::File> openFile(const char name[], rive::Factory& factory, rive::FileAssetLoader* loader)
 {
     FILE* f = fopen(name, "rb");
     if (!f)
@@ -81,7 +81,7 @@ rive::rcp<rive::File> openFile(const char name[], rive::Factory& factory)
     }
 
     fclose(f);
-    return rive::File::import(bytes, &factory);
+    return rive::File::import(bytes, &factory, nullptr, loader);
 }
 
 // ---------------------------------------------------------------------------
@@ -292,12 +292,12 @@ static std::string dataTypeToString(rive::DataType type)
     }
 }
 
-static std::vector<AssetInfo> getAssetsFromFile(rive::File* file,
-                                                 const std::vector<EmbeddedImageInfo>& embeddedImages)
+static std::vector<AssetInfo> getAssetsFromFile(
+    rive::File* file,
+    const std::unordered_map<std::string, EmbeddedImageInfo>& embeddedImages)
 {
     std::vector<AssetInfo> assetsInfo;
     std::unordered_set<std::string> usedAssetNames;
-    size_t embeddedImageIndex = 0;
 
     auto assets = file->assets();
     for (auto asset : assets)
@@ -314,19 +314,21 @@ static std::vector<AssetInfo> getAssetsFromFile(rive::File* file,
         auto assetName = asset->name();
         auto uniqueAssetName = makeUnique(assetName, usedAssetNames);
 
-        // For embedded images, use the format sniffed from magic bytes rather than
-        // asset->fileExtension(), which reflects the source filename and may not match
-        // the actual embedded format (e.g. PNG source re-encoded as webp in the editor).
+        // Look up embedded info by asset name. Only embedded images appear in the map
+        // (inBandBytes.size() > 0 in loadContents). Referenced and CDN images are absent,
+        // so embeddedByteSize stays 0 and fileExtension falls back to asset->fileExtension().
+        // The detected extension from magic bytes takes precedence over the metadata extension,
+        // which reflects the source filename and may not match the actual embedded format.
         size_t embeddedByteSize = 0;
         std::string fileExtension = asset->fileExtension();
-        if (assetType == "image" && asset->cdnUuidStr().empty())
+        if (assetType == "image")
         {
-            if (embeddedImageIndex < embeddedImages.size())
+            auto it = embeddedImages.find(assetName);
+            if (it != embeddedImages.end())
             {
-                const auto& info = embeddedImages[embeddedImageIndex++];
-                embeddedByteSize = info.byteSize;
-                if (!info.detectedExtension.empty())
-                    fileExtension = info.detectedExtension;
+                embeddedByteSize = it->second.byteSize;
+                if (!it->second.detectedExtension.empty())
+                    fileExtension = it->second.detectedExtension;
             }
         }
 
@@ -353,8 +355,9 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
         return std::nullopt;
     }
 
-    LintingFactory factory;
-    auto riveFile = openFile(riveFilePath.c_str(), factory);
+    rive::NoOpFactory factory;
+    LintingAssetLoader loader;
+    auto riveFile = openFile(riveFilePath.c_str(), factory, &loader);
     if (!riveFile)
     {
         std::cerr << "Error: Failed to parse Rive file: " << riveFilePath << std::endl;
@@ -363,7 +366,7 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
 
     std::filesystem::path path(riveFilePath);
     std::string fileNameWithoutExtension = path.stem().string();
-    std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get(), factory.embeddedImages);
+    std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get(), loader.embeddedImages);
 
     RiveFileData fileData;
     fileData.rivOriginalFileName = fileNameWithoutExtension;

@@ -3,7 +3,11 @@
 #include "types.h"
 #include "utils/no_op_factory.hpp"
 
+#include "rive/assets/file_asset.hpp"
+#include "rive/file_asset_loader.hpp"
+
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct EmbeddedImageInfo
@@ -12,19 +16,26 @@ struct EmbeddedImageInfo
     std::string detectedExtension; // sniffed from magic bytes; empty if unrecognized
 };
 
-// Captures size and actual format of embedded image assets during File::import().
-// CDN-hosted assets never call decodeImage, so only embedded images are captured.
-// The detected extension takes precedence over asset->fileExtension() for lint checks,
-// because fileExtension() reflects the source filename, not the embedded format.
-class LintingFactory : public rive::NoOpFactory
+// Observes asset resolution during File::import to capture size and actual format
+// of embedded images. loadContents receives the asset name and in-band bytes:
+//   inBandBytes.size() > 0  → embedded (bytes are in the .riv file)
+//   inBandBytes.size() == 0 → referenced or CDN (app/runtime supplies them)
+// Returns false so normal decode proceeds via the factory.
+class LintingAssetLoader : public rive::FileAssetLoader
 {
 public:
-    std::vector<EmbeddedImageInfo> embeddedImages;
+    // asset.name() → embedded info; absent for referenced/CDN images.
+    std::unordered_map<std::string, EmbeddedImageInfo> embeddedImages;
 
-    rive::rcp<rive::RenderImage> decodeImage(rive::Span<const uint8_t> data) override
+    bool loadContents(rive::FileAsset& asset,
+                      rive::Span<const uint8_t> inBandBytes,
+                      rive::Factory* factory) override
     {
-        embeddedImages.push_back({data.size(), detectFormat(data)});
-        return nullptr;
+        if (inBandBytes.size() > 0)
+        {
+            embeddedImages[asset.name()] = {inBandBytes.size(), detectFormat(inBandBytes)};
+        }
+        return false;
     }
 
 private:
