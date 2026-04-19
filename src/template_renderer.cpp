@@ -73,6 +73,7 @@ static nlohmann::json buildInjaData(const std::string& generatedFileName,
         riveFileData["riv_snake_case"] = fileData.riveSnakeCase;
         riveFileData["riv_kebab_case"] = fileData.rivKebabCase;
 
+        riveFileData["has_view_model"] = !fileData.viewmodels.empty();
         riveFileData["has_defaults"] = fileData.hasDefaults;
         riveFileData["default_artboard_name"] = fileData.defaultArtboardName;
         riveFileData["default_artboard_camel_case"] = toCamelCase(fileData.defaultArtboardName);
@@ -124,6 +125,7 @@ static nlohmann::json buildInjaData(const std::string& generatedFileName,
             viewmodelData["view_model_pascal_case"] = toPascalCase(viewModel.name);
             viewmodelData["view_model_snake_case"] = toSnakeCase(viewModel.name);
             viewmodelData["view_model_kebab_case"] = toKebabCase(viewModel.name);
+            viewmodelData["is_first"] = (vmIndex == 0);
 
             nlohmann::json properties = nlohmann::json::array();
             for (size_t propIndex = 0; propIndex < viewModel.properties.size(); propIndex++)
@@ -165,6 +167,7 @@ static nlohmann::json buildInjaData(const std::string& generatedFileName,
                 }
 
                 propertyData["property_type"] = propertyTypeData;
+                propertyData["last"] = (propIndex == viewModel.properties.size() - 1);
                 properties.push_back(propertyData);
             }
             viewmodelData["properties"] = properties;
@@ -202,6 +205,8 @@ static nlohmann::json buildInjaData(const std::string& generatedFileName,
             artboardData["artboard_camel_case"] = artboard.artboardCameCase;
             artboardData["artboard_snake_case"] = artboard.artboardSnakeCase;
             artboardData["artboard_kebab_case"] = artboard.artboardKebabCase;
+            artboardData["is_default"] = (artboard.artboardName == fileData.defaultArtboardName);
+            artboardData["has_view_model"] = !artboard.viewModelName.empty();
             artboardData["view_model_id"] = static_cast<int>(artboard.viewModelId);
             artboardData["view_model_name"] = artboard.viewModelName;
             artboardData["default_state_machine_name"] = artboard.defaultStateMachineName;
