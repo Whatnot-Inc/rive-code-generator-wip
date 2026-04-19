@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "CLIUTILS/CLI11.hpp"
@@ -30,6 +32,20 @@
 #include "utils/no_op_factory.hpp"
 
 const std::string generatedFileName = "rive_generated";
+
+// Captures byte sizes of embedded image assets during File::import().
+// CDN-hosted assets never call decodeImage, so only embedded images are counted.
+class LintingFactory : public rive::NoOpFactory
+{
+public:
+    std::vector<size_t> embeddedImageSizes;
+
+    rive::rcp<rive::RenderImage> decodeImage(rive::Span<const uint8_t> data) override
+    {
+        embeddedImageSizes.push_back(data.size());
+        return nullptr;
+    }
+};
 
 enum class CaseStyle
 {
@@ -78,6 +94,7 @@ struct AssetInfo
     std::string assetId;
     std::string cdnUuid;
     std::string cdnBaseUrl;
+    size_t embeddedByteSize = 0; // 0 for CDN-hosted assets or non-image types
 };
 
 struct EnumValueInfo
@@ -143,6 +160,27 @@ struct RiveFileData
     std::string defaultStateMachineName;
     std::string defaultViewModelName;
     bool hasDefaults;
+};
+
+struct LintConfig
+{
+    std::vector<std::string> allowedExtensions = {"webp"};
+    size_t maxAssetBytes = 200 * 1024; // 200 KB
+    bool jsonOutput = false;
+};
+
+struct LintViolation
+{
+    enum class Type
+    {
+        DisallowedAssetFormat,
+        OversizedAsset,
+        NoStateMachine,
+    };
+    Type type;
+    std::string fileName;
+    std::string name;   // asset name for asset violations, artboard name for SM violations
+    std::string detail; // file extension for format violations, byte count for size violations
 };
 
 // Helper function to convert a string to the specified case style
@@ -285,7 +323,7 @@ static std::string sanitizeString(const std::string& input)
     return output;
 }
 
-static rive::rcp<rive::File> openFile(const char name[])
+static rive::rcp<rive::File> openFile(const char name[], rive::Factory& factory)
 {
     FILE* f = fopen(name, "rb");
     if (!f)
@@ -302,11 +340,12 @@ static rive::rcp<rive::File> openFile(const char name[])
     if (fread(bytes.data(), 1, length, f) != length)
     {
         printf("Failed to read file into bytes array\n");
+        fclose(f);
         return nullptr;
     }
 
-    static rive::NoOpFactory gFactory;
-    return rive::File::import(bytes, &gFactory);
+    fclose(f);
+    return rive::File::import(bytes, &factory);
 }
 
 static bool shouldIncludeElement(const std::string& name, bool ignorePrivate)
@@ -537,10 +576,12 @@ getNestedTextValueRunPathsFromArtboard(
     return nestedTextValueRunsInfo;
 }
 
-static std::vector<AssetInfo> getAssetsFromFile(rive::File* file)
+static std::vector<AssetInfo> getAssetsFromFile(rive::File* file,
+                                                 const std::vector<size_t>& embeddedImageSizes)
 {
     std::vector<AssetInfo> assetsInfo;
     std::unordered_set<std::string> usedAssetNames;
+    size_t embeddedImageIndex = 0;
 
     auto assets = file->assets();
     for (auto asset : assets)
@@ -565,12 +606,24 @@ static std::vector<AssetInfo> getAssetsFromFile(rive::File* file)
         auto assetName = asset->name();
         auto uniqueAssetName = makeUnique(assetName, usedAssetNames);
 
+        // Correlate embedded image sizes: CDN-hosted assets don't call decodeImage,
+        // so only image assets with an empty cdnUuid have a corresponding factory entry.
+        size_t embeddedByteSize = 0;
+        if (assetType == "image" && asset->cdnUuidStr().empty())
+        {
+            if (embeddedImageIndex < embeddedImageSizes.size())
+            {
+                embeddedByteSize = embeddedImageSizes[embeddedImageIndex++];
+            }
+        }
+
         assetsInfo.push_back(AssetInfo{uniqueAssetName,
                                        assetType,
                                        asset->fileExtension(),
                                        std::to_string(asset->assetId()),
                                        asset->cdnUuidStr(),
-                                       asset->cdnBaseUrl()});
+                                       asset->cdnBaseUrl(),
+                                       embeddedByteSize});
     }
     return assetsInfo;
 }
@@ -618,7 +671,8 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
         return std::nullopt;
     }
 
-    auto riveFile = openFile(riveFilePath.c_str());
+    LintingFactory factory;
+    auto riveFile = openFile(riveFilePath.c_str(), factory);
     if (!riveFile)
     {
         std::cerr << "Error: Failed to parse Rive file: " << riveFilePath
@@ -628,7 +682,7 @@ static std::optional<RiveFileData> processRiveFile(const std::string& riveFilePa
 
     std::filesystem::path path(riveFilePath);
     std::string fileNameWithoutExtension = path.stem().string();
-    std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get());
+    std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get(), factory.embeddedImageSizes);
     RiveFileData fileData;
     fileData.rivOriginalFileName = fileNameWithoutExtension;  // Preserve original filename
     fileData.rivPascalCase = toPascalCase(fileNameWithoutExtension);
@@ -1286,6 +1340,124 @@ static nlohmann::json buildInjaData(const std::vector<RiveFileData>& riveFileDat
     return data;
 }
 
+static std::vector<LintViolation> runLint(const std::vector<RiveFileData>& files,
+                                           const LintConfig& config)
+{
+    std::vector<LintViolation> violations;
+
+    for (const auto& fileData : files)
+    {
+        for (const auto& asset : fileData.assets)
+        {
+            if (asset.type != "image")
+                continue;
+
+            // Format check
+            const auto& ext = asset.fileExtension;
+            bool allowed = std::find(config.allowedExtensions.begin(),
+                                     config.allowedExtensions.end(),
+                                     ext) != config.allowedExtensions.end();
+            if (!allowed)
+            {
+                violations.push_back({LintViolation::Type::DisallowedAssetFormat,
+                                      fileData.rivOriginalFileName,
+                                      asset.name,
+                                      ext});
+            }
+
+            // Size check — only for embedded assets with a known size
+            if (asset.embeddedByteSize > 0 && asset.embeddedByteSize > config.maxAssetBytes)
+            {
+                violations.push_back({LintViolation::Type::OversizedAsset,
+                                      fileData.rivOriginalFileName,
+                                      asset.name,
+                                      std::to_string(asset.embeddedByteSize)});
+            }
+        }
+
+        for (const auto& artboard : fileData.artboards)
+        {
+            if (artboard.stateMachines.empty())
+            {
+                violations.push_back({LintViolation::Type::NoStateMachine,
+                                      fileData.rivOriginalFileName,
+                                      artboard.artboardName,
+                                      ""});
+            }
+        }
+    }
+
+    return violations;
+}
+
+static int outputLintViolations(const std::vector<LintViolation>& violations,
+                                 const LintConfig& config)
+{
+    if (config.jsonOutput)
+    {
+        nlohmann::json output = nlohmann::json::array();
+        for (const auto& v : violations)
+        {
+            nlohmann::json vj;
+            vj["file"] = v.fileName;
+            switch (v.type)
+            {
+                case LintViolation::Type::DisallowedAssetFormat:
+                    vj["type"] = "disallowed_asset_format";
+                    vj["asset"] = v.name;
+                    vj["format"] = v.detail;
+                    break;
+                case LintViolation::Type::OversizedAsset:
+                    vj["type"] = "oversized_asset";
+                    vj["asset"] = v.name;
+                    vj["size_bytes"] = std::stoul(v.detail);
+                    vj["max_bytes"] = config.maxAssetBytes;
+                    break;
+                case LintViolation::Type::NoStateMachine:
+                    vj["type"] = "no_state_machine";
+                    vj["artboard"] = v.name;
+                    break;
+            }
+            output.push_back(vj);
+        }
+        std::cout << output.dump(2) << std::endl;
+    }
+    else
+    {
+        for (const auto& v : violations)
+        {
+            switch (v.type)
+            {
+                case LintViolation::Type::DisallowedAssetFormat:
+                    std::cerr << "error: [" << v.fileName << "] asset '" << v.name
+                              << "' has disallowed format '" << v.detail << "' (allowed: ";
+                    for (size_t i = 0; i < config.allowedExtensions.size(); i++)
+                    {
+                        if (i > 0) std::cerr << ", ";
+                        std::cerr << config.allowedExtensions[i];
+                    }
+                    std::cerr << ")" << std::endl;
+                    break;
+                case LintViolation::Type::OversizedAsset:
+                {
+                    size_t sizeKb = std::stoul(v.detail) / 1024;
+                    size_t maxKb = config.maxAssetBytes / 1024;
+                    std::cerr << "error: [" << v.fileName << "] asset '" << v.name
+                              << "' is " << sizeKb << " KB (max: " << maxKb << " KB)"
+                              << std::endl;
+                    break;
+                }
+                case LintViolation::Type::NoStateMachine:
+                    std::cerr << "error: [" << v.fileName << "] artboard '" << v.name
+                              << "' has no state machines" << std::endl;
+                    break;
+            }
+        }
+    }
+
+    return violations.empty() ? 0 : 1;
+}
+
 int main(int argc, char* argv[])
 {
     CLI::App app{"Rive Code Generator"};
@@ -1297,14 +1469,19 @@ int main(int argc, char* argv[])
     TemplateEngine templateEngine = TemplateEngine::Mustache; // Default to Mustache for backwards compatibility
     bool ignorePrivate = false;
 
+    // Lint options
+    bool lintMode = false;
+    std::vector<std::string> allowedExtensions;
+    size_t maxAssetSize = 200 * 1024;
+    std::string lintFormat = "text";
+
     app.add_option("-i, --input",
                    inputPath,
                    "Path to Rive file or directory containing Rive files")
         ->required()
         ->check(CLI::ExistingFile | CLI::ExistingDirectory);
 
-    app.add_option("-o, --output", outputFilePath, "Output file path")
-        ->required();
+    app.add_option("-o, --output", outputFilePath, "Output file path");
 
     app.add_option("-t,--template", templatePath, "Custom template file path");
 
@@ -1328,7 +1505,33 @@ int main(int argc, char* argv[])
                  ignorePrivate,
                  "Skip artboards, animations, state machines, and properties starting with 'internal', 'private', or '_'");
 
+    app.add_flag("--lint",
+                 lintMode,
+                 "Validate assets and artboards; exits non-zero on violations. "
+                 "Can be combined with -o for lint + codegen, or used alone (omit -o).");
+
+    app.add_option("--allowed-extensions",
+                   allowedExtensions,
+                   "Allowed image file extensions, e.g. webp or webp,avif (default: webp)")
+        ->delimiter(',');
+
+    app.add_option("--max-asset-size",
+                   maxAssetSize,
+                   "Maximum embedded asset size in bytes (default: 204800 = 200 KB)");
+
+    app.add_option("--lint-format",
+                   lintFormat,
+                   "Lint output format: text (default) or json")
+        ->transform(CLI::IsMember({"text", "json"}));
+
     CLI11_PARSE(app, argc, argv)
+
+    if (outputFilePath.empty() && !lintMode)
+    {
+        std::cerr << "Error: -o/--output is required when not running in --lint mode."
+                  << std::endl;
+        return 1;
+    }
 
     std::string templateStr;
     if (!templatePath.empty())
@@ -1380,6 +1583,32 @@ int main(int argc, char* argv[])
         }
         // If result is nullopt, the error has already been printed
     }
+
+    if (lintMode)
+    {
+        LintConfig lintConfig;
+        lintConfig.allowedExtensions = allowedExtensions.empty()
+                                           ? std::vector<std::string>{"webp"}
+                                           : allowedExtensions;
+        lintConfig.maxAssetBytes = maxAssetSize;
+        lintConfig.jsonOutput = (lintFormat == "json");
+
+        auto violations = runLint(riveFileDataList, lintConfig);
+        int lintResult = outputLintViolations(violations, lintConfig);
+
+        // If lint-only (no output path), return lint result immediately
+        if (outputFilePath.empty())
+        {
+            return lintResult;
+        }
+
+        // Combined lint + codegen: fail early if violations found
+        if (lintResult != 0)
+        {
+            return lintResult;
+        }
+    }
+
     kainjow::mustache::data templateData;
     std::vector<kainjow::mustache::data> riveFileList;
 
