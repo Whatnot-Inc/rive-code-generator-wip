@@ -33,7 +33,8 @@ public:
     {
         if (inBandBytes.size() > 0)
         {
-            embeddedImages[asset.name()] = {inBandBytes.size(), detectFormat(inBandBytes)};
+            embeddedImages.emplace(asset.name(),
+                                   EmbeddedImageInfo{inBandBytes.size(), detectFormat(inBandBytes)});
         }
         return false;
     }
