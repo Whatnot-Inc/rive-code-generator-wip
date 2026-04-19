@@ -293,7 +293,7 @@ static std::string dataTypeToString(rive::DataType type)
 }
 
 static std::vector<AssetInfo> getAssetsFromFile(rive::File* file,
-                                                 const std::vector<size_t>& embeddedImageSizes)
+                                                 const std::vector<EmbeddedImageInfo>& embeddedImages)
 {
     std::vector<AssetInfo> assetsInfo;
     std::unordered_set<std::string> usedAssetNames;
@@ -314,20 +314,25 @@ static std::vector<AssetInfo> getAssetsFromFile(rive::File* file,
         auto assetName = asset->name();
         auto uniqueAssetName = makeUnique(assetName, usedAssetNames);
 
-        // Correlate embedded image sizes: CDN-hosted assets don't call decodeImage,
-        // so only image assets with an empty cdnUuid have a corresponding factory entry.
+        // For embedded images, use the format sniffed from magic bytes rather than
+        // asset->fileExtension(), which reflects the source filename and may not match
+        // the actual embedded format (e.g. PNG source re-encoded as webp in the editor).
         size_t embeddedByteSize = 0;
+        std::string fileExtension = asset->fileExtension();
         if (assetType == "image" && asset->cdnUuidStr().empty())
         {
-            if (embeddedImageIndex < embeddedImageSizes.size())
+            if (embeddedImageIndex < embeddedImages.size())
             {
-                embeddedByteSize = embeddedImageSizes[embeddedImageIndex++];
+                const auto& info = embeddedImages[embeddedImageIndex++];
+                embeddedByteSize = info.byteSize;
+                if (!info.detectedExtension.empty())
+                    fileExtension = info.detectedExtension;
             }
         }
 
         assetsInfo.push_back(AssetInfo{uniqueAssetName,
                                        assetType,
-                                       asset->fileExtension(),
+                                       fileExtension,
                                        std::to_string(asset->assetId()),
                                        asset->cdnUuidStr(),
                                        asset->cdnBaseUrl(),
@@ -358,7 +363,7 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
 
     std::filesystem::path path(riveFilePath);
     std::string fileNameWithoutExtension = path.stem().string();
-    std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get(), factory.embeddedImageSizes);
+    std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get(), factory.embeddedImages);
 
     RiveFileData fileData;
     fileData.rivOriginalFileName = fileNameWithoutExtension;
