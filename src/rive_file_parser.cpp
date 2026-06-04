@@ -1,4 +1,5 @@
 #include "rive_file_parser.h"
+#include "byte_stats.h"
 #include "string_utils.h"
 
 #include "rive/animation/linear_animation_instance.hpp"
@@ -7,9 +8,25 @@
 #include "rive/assets/audio_asset.hpp"
 #include "rive/assets/font_asset.hpp"
 #include "rive/assets/image_asset.hpp"
+#include "rive/bones/bone.hpp"
 #include "rive/generated/animation/state_machine_bool_base.hpp"
 #include "rive/generated/animation/state_machine_number_base.hpp"
 #include "rive/generated/animation/state_machine_trigger_base.hpp"
+#include "rive/generated/constraints/constraint_base.hpp"
+#include "rive/nested_artboard.hpp"
+#include "rive/shapes/clipping_shape.hpp"
+#include "rive/shapes/image.hpp"
+#include "rive/shapes/mesh.hpp"
+#include "rive/shapes/mesh_vertex.hpp"
+#include "rive/shapes/paint/feather.hpp"
+#include "rive/shapes/paint/fill.hpp"
+#include "rive/shapes/paint/linear_gradient.hpp"
+#include "rive/shapes/paint/radial_gradient.hpp"
+#include "rive/shapes/paint/stroke.hpp"
+#include "rive/shapes/paint/trim_path.hpp"
+#include "rive/shapes/path.hpp"
+#include "rive/shapes/path_vertex.hpp"
+#include "rive/shapes/shape.hpp"
 #include "rive/text/text_value_run.hpp"
 #include "rive/viewmodel/data_enum.hpp"
 #include "rive/viewmodel/data_enum_value.hpp"
@@ -23,6 +40,46 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+
+namespace
+{
+EnumInfo makeEnumInfo(rive::DataEnum* dataEnum)
+{
+    EnumInfo enumInfo;
+    enumInfo.name = dataEnum->enumName();
+    const auto& values = dataEnum->values();
+    for (const auto* value : values)
+    {
+        enumInfo.values.push_back({value->key()});
+    }
+    return enumInfo;
+}
+
+void upsertEnumInfo(std::vector<EnumInfo>& enums, rive::DataEnum* dataEnum)
+{
+    auto enumInfo = makeEnumInfo(dataEnum);
+    for (auto& existingEnum : enums)
+    {
+        if (existingEnum.name == enumInfo.name)
+        {
+            std::unordered_set<std::string> existingValues;
+            for (const auto& value : existingEnum.values)
+            {
+                existingValues.insert(value.key);
+            }
+            for (const auto& value : enumInfo.values)
+            {
+                if (existingValues.insert(value.key).second)
+                {
+                    existingEnum.values.push_back(value);
+                }
+            }
+            return;
+        }
+    }
+    enums.push_back(enumInfo);
+}
+} // namespace
 
 // ---------------------------------------------------------------------------
 // File discovery
@@ -268,6 +325,125 @@ static std::vector<NestedTextValueRunInfo> getNestedTextValueRunPathsFromArtboar
     return nestedTextValueRunsInfo;
 }
 
+static void accumulateArtboardStats(
+    rive::ArtboardInstance* artboard,
+    const std::unordered_map<const rive::ImageAsset*, AssetInfo>& assetsByImage,
+    ArtboardStats& stats,
+    std::unordered_set<std::string>& seenAssetIds,
+    std::unordered_set<const rive::ArtboardInstance*>& seenArtboards)
+{
+    if (artboard == nullptr || !seenArtboards.insert(artboard).second)
+    {
+        return;
+    }
+
+    stats.objectCount += artboard->objects().size();
+    stats.nestedArtboardCount += artboard->nestedArtboards().size();
+
+    for (auto object : artboard->objects())
+    {
+        if (object == nullptr)
+        {
+            continue;
+        }
+
+        if (object->is<rive::Image>())
+        {
+            stats.imageCount++;
+            auto imageAsset = object->as<rive::Image>()->imageAsset();
+            auto assetIt = assetsByImage.find(imageAsset);
+            auto assetId = assetIt == assetsByImage.end() ? std::to_string(object->as<rive::Image>()->assetId())
+                                                          : assetIt->second.assetId;
+            if (seenAssetIds.insert(assetId).second)
+            {
+                if (assetIt != assetsByImage.end())
+                {
+                    stats.referencedDecodedRGBAByteSize += assetIt->second.decodedRGBAByteSize;
+                    stats.referencedAssets.push_back({assetIt->second.name,
+                                                       assetId,
+                                                       assetIt->second.decodedRGBAByteSize});
+                }
+                else
+                {
+                    stats.referencedAssets.push_back({"", assetId, 0});
+                }
+            }
+        }
+        if (object->is<rive::Shape>())
+        {
+            stats.shapeCount++;
+        }
+        if (object->is<rive::Path>())
+        {
+            stats.pathCount++;
+        }
+        if (object->is<rive::PathVertex>())
+        {
+            stats.pathVertexCount++;
+        }
+        if (object->is<rive::Mesh>())
+        {
+            stats.meshCount++;
+        }
+        if (object->is<rive::MeshVertex>())
+        {
+            stats.meshVertexCount++;
+        }
+        if (object->is<rive::ClippingShape>())
+        {
+            stats.clippingShapeCount++;
+        }
+        if (object->is<rive::Fill>())
+        {
+            stats.fillCount++;
+        }
+        if (object->is<rive::Stroke>())
+        {
+            stats.strokeCount++;
+        }
+        if (object->is<rive::LinearGradient>() || object->is<rive::RadialGradient>())
+        {
+            stats.gradientCount++;
+        }
+        if (object->is<rive::TrimPath>())
+        {
+            stats.trimPathCount++;
+        }
+        if (object->is<rive::Feather>())
+        {
+            stats.featherCount++;
+        }
+        if (object->is<rive::Bone>())
+        {
+            stats.boneCount++;
+        }
+        if (object->is<rive::ConstraintBase>())
+        {
+            stats.constraintCount++;
+        }
+    }
+    for (auto nestedArtboard : artboard->nestedArtboards())
+    {
+        accumulateArtboardStats(nestedArtboard->artboardInstance(),
+                                assetsByImage,
+                                stats,
+                                seenAssetIds,
+                                seenArtboards);
+    }
+}
+
+static ArtboardStats getArtboardStatsFromArtboard(
+    rive::ArtboardInstance* artboard,
+    const std::unordered_map<const rive::ImageAsset*, AssetInfo>& assetsByImage)
+{
+    ArtboardStats stats;
+    std::unordered_set<std::string> seenAssetIds;
+    std::unordered_set<const rive::ArtboardInstance*> seenArtboards;
+    accumulateArtboardStats(artboard, assetsByImage, stats, seenAssetIds, seenArtboards);
+
+    return stats;
+}
+
 // ---------------------------------------------------------------------------
 // Asset extraction
 // ---------------------------------------------------------------------------
@@ -288,6 +464,7 @@ static std::string dataTypeToString(rive::DataType type)
         case rive::DataType::integer:         return "integer";
         case rive::DataType::symbolListIndex: return "symbolListIndex";
         case rive::DataType::assetImage:      return "assetImage";
+        case rive::DataType::artboard:        return "artboard";
         default:                              return "unknown";
     }
 }
@@ -329,6 +506,19 @@ static std::vector<AssetInfo> getAssetsFromFile(
                 embeddedByteSize = it->second.byteSize;
                 if (!it->second.detectedExtension.empty())
                     fileExtension = it->second.detectedExtension;
+                auto width = it->second.width;
+                auto height = it->second.height;
+                assetsInfo.push_back(AssetInfo{uniqueAssetName,
+                                               assetType,
+                                               fileExtension,
+                                               std::to_string(asset->assetId()),
+                                               asset->cdnUuidStr(),
+                                               asset->cdnBaseUrl(),
+                                               embeddedByteSize,
+                                               width,
+                                               height,
+                                               static_cast<size_t>(width) * height * 4});
+                continue;
             }
         }
 
@@ -338,7 +528,10 @@ static std::vector<AssetInfo> getAssetsFromFile(
                                        std::to_string(asset->assetId()),
                                        asset->cdnUuidStr(),
                                        asset->cdnBaseUrl(),
-                                       embeddedByteSize});
+                                       embeddedByteSize,
+                                       0,
+                                       0,
+                                       0});
     }
     return assetsInfo;
 }
@@ -367,6 +560,16 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
     std::filesystem::path path(riveFilePath);
     std::string fileNameWithoutExtension = path.stem().string();
     std::vector<AssetInfo> assets = getAssetsFromFile(riveFile.get(), loader.embeddedImages);
+    std::unordered_map<const rive::ImageAsset*, AssetInfo> assetsByImage;
+    auto riveAssets = riveFile->assets();
+    for (size_t i = 0; i < riveAssets.size() && i < assets.size(); i++)
+    {
+        auto riveAsset = riveAssets[i];
+        if (riveAsset != nullptr && riveAsset->is<rive::ImageAsset>())
+        {
+            assetsByImage.emplace(riveAsset->as<rive::ImageAsset>(), assets[i]);
+        }
+    }
 
     RiveFileData fileData;
     fileData.rivOriginalFileName = fileNameWithoutExtension;
@@ -375,21 +578,21 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
     fileData.riveSnakeCase = toSnakeCase(fileNameWithoutExtension);
     fileData.rivKebabCase = toKebabCase(fileNameWithoutExtension);
     fileData.assets = assets;
+    fileData.byteStats = analyzeRiveByteStats(riveFilePath);
 
-    // Process enums
+    // Process enums (deduplicate by name — riv files can reference the same enum multiple times)
+    std::unordered_set<std::string> seenEnumNames;
     const auto& fileEnums = riveFile->enums();
     for (auto* dataEnum : fileEnums)
     {
         if (dataEnum)
         {
-            EnumInfo enumInfo;
-            enumInfo.name = dataEnum->enumName();
-            const auto& values = dataEnum->values();
-            for (const auto* value : values)
+            const auto& enumName = dataEnum->enumName();
+            if (!seenEnumNames.insert(enumName).second)
             {
-                enumInfo.values.push_back({value->key()});
+                continue;
             }
-            fileData.enums.push_back(enumInfo);
+            fileData.enums.push_back(makeEnumInfo(dataEnum));
         }
     }
 
@@ -520,6 +723,7 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
 
                     auto enumName = dataEnum->enumName();
                     usedEnumNames.insert(enumName);
+                    upsertEnumInfo(fileData.enums, dataEnum);
 
                     uint32_t defaultIndex = enum_instance->propertyValue();
                     std::string defaultValue = "";
@@ -677,6 +881,7 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
         auto textValueRuns = getTextValueRunsFromArtboard(artboard.get());
         std::cout << "  Getting nested text value runs..." << std::endl;
         auto nestedTextValueRuns = getNestedTextValueRunPathsFromArtboard(artboard.get());
+        auto stats = getArtboardStatsFromArtboard(artboard.get(), assetsByImage);
         std::cout << "  Done getting artboard data" << std::endl;
 
         bool isDefault = (i == 0);
@@ -725,7 +930,8 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
                                        viewModelName,
                                        hasViewModel,
                                        defaultStateMachineName,
-                                       hasDefaultStateMachine});
+                                       hasDefaultStateMachine,
+                                       stats});
     }
 
     return fileData;

@@ -150,6 +150,7 @@ static nlohmann::json buildInjaData(const std::string& generatedFileName,
                 propertyTypeData["is_list"] = (property.type == "list");
                 propertyTypeData["is_image"] = (property.type == "image" || property.type == "assetImage");
                 propertyTypeData["is_trigger"] = (property.type == "trigger");
+                propertyTypeData["is_artboard"] = (property.type == "artboard");
                 propertyTypeData["backing_name"] = property.backingName;
                 propertyTypeData["backing_camel_case"] = toCamelCase(property.backingName);
                 propertyTypeData["backing_pascal_case"] = toPascalCase(property.backingName);
@@ -405,6 +406,7 @@ static kainjow::mustache::data buildMustacheData(const std::string& generatedFil
                 propertyTypeData.set("is_color", property.type == "color");
                 propertyTypeData.set("is_list", property.type == "list");
                 propertyTypeData.set("is_trigger", property.type == "trigger");
+                propertyTypeData.set("is_artboard", property.type == "artboard");
                 propertyTypeData.set("backing_name", property.backingName);
                 propertyTypeData.set("backing_camel_case", toCamelCase(property.backingName));
                 propertyTypeData.set("backing_pascal_case", toPascalCase(property.backingName));

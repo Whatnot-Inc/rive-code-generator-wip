@@ -1,5 +1,6 @@
 #include "lint.h"
 #include "rive_file_parser.h"
+#include "stats.h"
 #include "template_renderer.h"
 #include "types.h"
 
@@ -8,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -25,9 +27,11 @@ int main(int argc, char* argv[])
     bool ignorePrivate = false;
 
     bool lintMode = false;
+    bool statsMode = false;
     std::vector<std::string> allowedExtensions;
     size_t maxAssetSize = 200 * 1024;
     std::string lintFormat = "text";
+    std::string statsFormat = "text";
 
     app.add_option("-i,--input",
                    inputPath,
@@ -64,6 +68,11 @@ int main(int argc, char* argv[])
                  "Validate assets and artboards; exits non-zero on violations. "
                  "Can be combined with -o for lint + codegen, or used alone (omit -o).");
 
+    app.add_flag("--stats",
+                 statsMode,
+                 "Print file, embedded image memory, and artboard complexity stats. "
+                 "Can be combined with -o for stats + codegen, or used alone (omit -o).");
+
     app.add_option("--allowed-extensions",
                    allowedExtensions,
                    "Allowed image file extensions, e.g. webp or webp,avif (default: webp)")
@@ -78,11 +87,16 @@ int main(int argc, char* argv[])
                    "Lint output format: text (default) or json")
         ->transform(CLI::IsMember({"text", "json"}));
 
+    app.add_option("--stats-format",
+                   statsFormat,
+                   "Stats output format: text (default) or json")
+        ->transform(CLI::IsMember({"text", "json"}));
+
     CLI11_PARSE(app, argc, argv)
 
-    if (outputFilePath.empty() && !lintMode)
+    if (outputFilePath.empty() && !lintMode && !statsMode)
     {
-        std::cerr << "Error: -o/--output is required when not running in --lint mode."
+        std::cerr << "Error: -o/--output is required when not running in --lint or --stats mode."
                   << std::endl;
         return 1;
     }
@@ -105,11 +119,24 @@ int main(int argc, char* argv[])
     }
 
     std::vector<RiveFileData> riveFileDataList;
+    auto* originalCoutBuffer = std::cout.rdbuf();
+    bool suppressParserLogs = outputFilePath.empty() && (lintMode || statsMode);
+    std::ostringstream parserLogSink;
+    if (suppressParserLogs)
+    {
+        std::cout.rdbuf(parserLogSink.rdbuf());
+    }
+
     for (const auto& riv_file : riveFiles)
     {
         auto result = processRiveFile(riv_file, ignorePrivate);
         if (result)
             riveFileDataList.push_back(*result);
+    }
+
+    if (suppressParserLogs)
+    {
+        std::cout.rdbuf(originalCoutBuffer);
     }
 
     if (lintMode)
@@ -129,6 +156,17 @@ int main(int argc, char* argv[])
 
         if (lintResult != 0)
             return lintResult;
+    }
+
+    if (statsMode)
+    {
+        StatsConfig statsConfig;
+        statsConfig.jsonOutput = (statsFormat == "json");
+
+        int statsResult = outputStats(riveFileDataList, statsConfig);
+
+        if (outputFilePath.empty())
+            return statsResult;
     }
 
     auto result = renderTemplate(templateStr, kGeneratedFileName, riveFileDataList, templateEngine);

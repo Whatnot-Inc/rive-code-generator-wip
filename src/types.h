@@ -52,6 +52,38 @@ struct AssetInfo
     std::string cdnUuid;
     std::string cdnBaseUrl;
     size_t embeddedByteSize = 0; // 0 for CDN-hosted assets or non-image types
+    uint32_t width = 0;
+    uint32_t height = 0;
+    size_t decodedRGBAByteSize = 0; // width * height * 4 for embedded image assets
+};
+
+struct ReferencedAssetInfo
+{
+    std::string name;
+    std::string assetId;
+    size_t decodedRGBAByteSize = 0;
+};
+
+struct ArtboardStats
+{
+    size_t objectCount = 0;
+    size_t imageCount = 0;
+    size_t shapeCount = 0;
+    size_t pathCount = 0;
+    size_t pathVertexCount = 0;
+    size_t meshCount = 0;
+    size_t meshVertexCount = 0;
+    size_t clippingShapeCount = 0;
+    size_t fillCount = 0;
+    size_t strokeCount = 0;
+    size_t gradientCount = 0;
+    size_t trimPathCount = 0;
+    size_t featherCount = 0;
+    size_t boneCount = 0;
+    size_t constraintCount = 0;
+    size_t nestedArtboardCount = 0;
+    std::vector<ReferencedAssetInfo> referencedAssets;
+    size_t referencedDecodedRGBAByteSize = 0;
 };
 
 struct EnumValueInfo
@@ -79,6 +111,42 @@ struct ViewModelInfo
     std::vector<PropertyInfo> properties;
 };
 
+struct ByteStatsBucket
+{
+    std::string name;
+    size_t objectCount = 0;
+    size_t byteSize = 0;
+};
+
+struct ByteStatsType
+{
+    std::string name;
+    std::string category;
+    uint32_t typeKey = 0;
+    size_t objectCount = 0;
+    size_t byteSize = 0;
+};
+
+struct ByteStatsPrimitive
+{
+    std::string name;
+    size_t propertyCount = 0;
+    size_t byteSize = 0;
+};
+
+struct ByteStats
+{
+    bool parsed = false;
+    std::string error;
+    size_t fileByteSize = 0;
+    size_t headerByteSize = 0;
+    size_t objectCount = 0;
+    size_t parsedObjectByteSize = 0;
+    std::vector<ByteStatsBucket> buckets;
+    std::vector<ByteStatsType> topTypes;
+    std::vector<ByteStatsPrimitive> primitives;
+};
+
 struct ArtboardData
 {
     std::string artboardName;
@@ -97,6 +165,7 @@ struct ArtboardData
     bool hasViewModel;
     std::string defaultStateMachineName;
     bool hasDefaultStateMachine;
+    ArtboardStats stats;
 };
 
 struct RiveFileData
@@ -110,6 +179,7 @@ struct RiveFileData
     std::vector<AssetInfo> assets;
     std::vector<EnumInfo> enums;
     std::vector<ViewModelInfo> viewmodels;
+    ByteStats byteStats;
 
     std::string defaultArtboardName;
     std::string defaultStateMachineName;
@@ -136,4 +206,9 @@ struct LintViolation
     std::string fileName;
     std::string name;   // asset name for asset violations, artboard name for SM violations
     std::string detail; // file extension for format violations, byte count for size violations
+};
+
+struct StatsConfig
+{
+    bool jsonOutput = false;
 };
