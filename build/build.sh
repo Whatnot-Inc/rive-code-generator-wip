@@ -116,7 +116,7 @@ fi
 
 OUT="out/lib/$CONFIG"
 OUT="${OUT%/}" # Remove trailing slash if it exists
-$PREMAKE --scripts=../rive-runtime/build/ --file=premake5_code_generator.lua $TARGET --config=$CONFIG --out=$OUT
+$PREMAKE --scripts=../rive-runtime/build/ --file=premake5_code_generator.lua $TARGET --config=$CONFIG --out=$OUT --with_rive_tools
 
 if [ "$OS" = "macosx" ]; then
   NUM_CORES=$(($(sysctl -n hw.physicalcpu) + 1))

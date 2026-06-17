@@ -3,11 +3,17 @@
 #include "string_utils.h"
 
 #include "rive/animation/linear_animation_instance.hpp"
+#include "rive/animation/state_machine.hpp"
+#include "rive/animation/state_machine_bool.hpp"
 #include "rive/animation/state_machine_input_instance.hpp"
 #include "rive/animation/state_machine_instance.hpp"
+#include "rive/animation/state_machine_number.hpp"
+#include "rive/animation/state_machine_trigger.hpp"
 #include "rive/assets/audio_asset.hpp"
 #include "rive/assets/font_asset.hpp"
 #include "rive/assets/image_asset.hpp"
+#include "rive/assets/script_asset.hpp"
+#include "rive/assets/shader_asset.hpp"
 #include "rive/bones/bone.hpp"
 #include "rive/generated/animation/state_machine_bool_base.hpp"
 #include "rive/generated/animation/state_machine_number_base.hpp"
@@ -37,6 +43,7 @@
 #include <iomanip>
 #include <iostream>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -138,6 +145,18 @@ rive::rcp<rive::File> openFile(const char name[], rive::Factory& factory, rive::
     }
 
     fclose(f);
+#ifdef WITH_RIVE_TOOLS
+    rive::ImportResult stripResult = rive::ImportResult::malformed;
+    auto strippedBytes =
+        rive::File::stripAssets(bytes,
+                                {rive::ScriptAsset::typeKey,
+                                 rive::ShaderAsset::typeKey},
+                                &stripResult);
+    if (stripResult == rive::ImportResult::success)
+    {
+        return rive::File::import(strippedBytes, &factory, nullptr, loader);
+    }
+#endif
     return rive::File::import(bytes, &factory, nullptr, loader);
 }
 
@@ -211,7 +230,11 @@ getStateMachinesFromArtboard(rive::ArtboardInstance* artboard, bool ignorePrivat
     auto stateMachineCount = artboard->stateMachineCount();
     for (int i = 0; i < stateMachineCount; i++)
     {
-        auto stateMachine = artboard->stateMachineAt(i);
+        auto stateMachine = artboard->stateMachine(i);
+        if (stateMachine == nullptr)
+        {
+            continue;
+        }
         std::string stateMachineName = stateMachine->name();
 
         if (!shouldIncludeElement(stateMachineName, ignorePrivate))
@@ -228,11 +251,11 @@ getStateMachinesFromArtboard(rive::ArtboardInstance* artboard, bool ignorePrivat
             std::string inputType;
             std::string defaultValue;
 
-            switch (input->inputCoreType())
+            switch (input->coreType())
             {
                 case rive::StateMachineNumberBase::typeKey:
                 {
-                    auto smiNumberInput = static_cast<rive::SMINumber*>(input);
+                    auto smiNumberInput = static_cast<const rive::StateMachineNumber*>(input);
                     inputType = "number";
                     defaultValue = std::to_string(smiNumberInput->value());
                     break;
@@ -245,7 +268,7 @@ getStateMachinesFromArtboard(rive::ArtboardInstance* artboard, bool ignorePrivat
                 }
                 case rive::StateMachineBoolBase::typeKey:
                 {
-                    auto smiBoolInput = static_cast<rive::SMIBool*>(input);
+                    auto smiBoolInput = static_cast<const rive::StateMachineBool*>(input);
                     inputType = "boolean";
                     defaultValue = smiBoolInput->value() ? "true" : "false";
                     break;
@@ -580,19 +603,14 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
     fileData.assets = assets;
     fileData.byteStats = analyzeRiveByteStats(riveFilePath);
 
-    // Process enums (deduplicate by name — riv files can reference the same enum multiple times)
-    std::unordered_set<std::string> seenEnumNames;
+    // Process enums (merge by name — riv files can reference the same enum multiple times,
+    // and later copies may include newer values).
     const auto& fileEnums = riveFile->enums();
     for (auto* dataEnum : fileEnums)
     {
         if (dataEnum)
         {
-            const auto& enumName = dataEnum->enumName();
-            if (!seenEnumNames.insert(enumName).second)
-            {
-                continue;
-            }
-            fileData.enums.push_back(makeEnumInfo(dataEnum));
+            upsertEnumInfo(fileData.enums, dataEnum);
         }
     }
 
@@ -828,13 +846,13 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
         fileData.defaultArtboardName = defaultArtboard->name();
         std::cout << "  Default artboard: " << fileData.defaultArtboardName << std::endl;
 
-        auto defaultArtboardInstance = defaultArtboard->instance();
-        if (defaultArtboardInstance)
+        auto defaultStateMachineIndex = defaultArtboard->defaultStateMachineIndex();
+        if (defaultStateMachineIndex >= 0)
         {
-            auto defaultStateMachineInstance = defaultArtboardInstance->defaultStateMachine();
-            if (defaultStateMachineInstance)
+            auto defaultStateMachine = defaultArtboard->stateMachine(defaultStateMachineIndex);
+            if (defaultStateMachine)
             {
-                fileData.defaultStateMachineName = defaultStateMachineInstance->name();
+                fileData.defaultStateMachineName = defaultStateMachine->name();
                 std::cout << "  Default state machine: "
                           << fileData.defaultStateMachineName << std::endl;
             }
@@ -905,10 +923,10 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
 
         std::string defaultStateMachineName = "";
         bool hasDefaultStateMachine = false;
-        auto artboardInstance = artboard->instance();
-        if (artboardInstance)
+        auto defaultStateMachineIndex = artboard->defaultStateMachineIndex();
+        if (defaultStateMachineIndex >= 0)
         {
-            auto defaultStateMachine = artboardInstance->defaultStateMachine();
+            auto defaultStateMachine = artboard->stateMachine(defaultStateMachineIndex);
             if (defaultStateMachine)
             {
                 defaultStateMachineName = defaultStateMachine->name();

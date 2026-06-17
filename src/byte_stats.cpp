@@ -380,7 +380,9 @@ bool isBytesPropertyKey(uint32_t propertyKey)
     {
         case rive::NestedArtboardBase::dataBindPathIdsPropertyKey:
         case rive::StateMachineFireTriggerBase::viewModelPathIdsPropertyKey:
-        case rive::StateMachineListenerBase::viewModelPathIdsPropertyKey:
+        case rive::StateMachineListenerSingleBase::viewModelPathIdsPropertyKey:
+        case rive::ListenerInputTypeViewModelBase::viewModelPathIdsPropertyKey:
+        case rive::DataBindPathBase::pathPropertyKey:
         case rive::MeshBase::triangleIndexBytesPropertyKey:
         case rive::DataConverterOperationViewModelBase::sourcePathIdsPropertyKey:
         case rive::DataBindContextBase::sourcePathIdsPropertyKey:
