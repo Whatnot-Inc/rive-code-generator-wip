@@ -45,7 +45,8 @@ struct NestedTextValueRunInfo
 
 struct AssetInfo
 {
-    std::string name;
+    std::string name;    // disambiguated for codegen identifiers (second "SF-Pro" -> "SF-ProU1")
+    std::string rawName; // as authored in the .riv; runtimes resolve assets by "<rawName>-<assetId>"
     std::string type;
     std::string fileExtension;
     std::string assetId;

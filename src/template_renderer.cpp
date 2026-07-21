@@ -183,6 +183,11 @@ static nlohmann::json buildInjaData(const std::string& generatedFileName,
             const auto& asset = fileData.assets[assetIndex];
             nlohmann::json assetData;
             assetData["asset_name"] = asset.name;
+            // The name exactly as authored in the .riv, without codegen's "U<n>" duplicate
+            // disambiguation. Runtimes resolve referenced assets by "<raw name>-<asset id>"
+            // (the exported uniqueFilename), so templates must use this — not asset_name —
+            // wherever the value feeds a runtime asset lookup.
+            assetData["asset_raw_name"] = asset.rawName;
             assetData["asset_camel_case"] = toCamelCase(asset.name);
             assetData["asset_pascal_case"] = toPascalCase(asset.name);
             assetData["asset_snake_case"] = toSnakeCase(asset.name);
@@ -428,6 +433,8 @@ static kainjow::mustache::data buildMustacheData(const std::string& generatedFil
             const auto& asset = fileData.assets[assetIndex];
             kainjow::mustache::data assetData;
             assetData["asset_name"] = asset.name;
+            // See the inja renderer above: raw .riv name for runtime asset lookups.
+            assetData["asset_raw_name"] = asset.rawName;
             assetData["asset_camel_case"] = toCamelCase(asset.name);
             assetData["asset_pascal_case"] = toPascalCase(asset.name);
             assetData["asset_snake_case"] = toSnakeCase(asset.name);

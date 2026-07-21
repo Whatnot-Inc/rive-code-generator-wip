@@ -532,6 +532,7 @@ static std::vector<AssetInfo> getAssetsFromFile(
                 auto width = it->second.width;
                 auto height = it->second.height;
                 assetsInfo.push_back(AssetInfo{uniqueAssetName,
+                                               assetName,
                                                assetType,
                                                fileExtension,
                                                std::to_string(asset->assetId()),
@@ -546,6 +547,7 @@ static std::vector<AssetInfo> getAssetsFromFile(
         }
 
         assetsInfo.push_back(AssetInfo{uniqueAssetName,
+                                       assetName,
                                        assetType,
                                        fileExtension,
                                        std::to_string(asset->assetId()),
