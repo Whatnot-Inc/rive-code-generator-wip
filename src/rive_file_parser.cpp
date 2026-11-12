@@ -86,6 +86,23 @@ void upsertEnumInfo(std::vector<EnumInfo>& enums, rive::DataEnum* dataEnum)
     }
     enums.push_back(enumInfo);
 }
+// A new instance holds only zero values; the file's stored instance holds the authored
+// defaults. Stored defaults are opt-in because the wrappers push defaults on bind.
+rive::rcp<rive::ViewModelInstance> defaultViewModelInstance(const rive::File& file,
+                                                            size_t viewModelIndex,
+                                                            const std::string& name,
+                                                            bool storedDefaults)
+{
+    if (!storedDefaults)
+    {
+        return file.createViewModelInstance(name);
+    }
+    if (auto stored = file.createViewModelInstance(viewModelIndex, size_t{0}))
+    {
+        return stored;
+    }
+    return file.createViewModelInstance(name);
+}
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -565,7 +582,7 @@ static std::vector<AssetInfo> getAssetsFromFile(
 // processRiveFile
 // ---------------------------------------------------------------------------
 
-std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, bool ignorePrivate)
+std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, bool ignorePrivate, bool storedDefaults)
 {
     if (std::filesystem::is_empty(riveFilePath))
     {
@@ -693,7 +710,7 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
                 }
                 else if (property.type == rive::DataType::enumType)
                 {
-                    auto vmi = riveFile->createViewModelInstance(viewModel->name());
+                    auto vmi = defaultViewModelInstance(*riveFile, i, viewModel->name(), storedDefaults);
                     if (!vmi)
                     {
                         std::cerr << "Warning: Failed to create ViewModel instance for: "
@@ -757,7 +774,7 @@ std::optional<RiveFileData> processRiveFile(const std::string& riveFilePath, boo
                 }
                 else
                 {
-                    auto vmi = riveFile->createViewModelInstance(viewModel->name());
+                    auto vmi = defaultViewModelInstance(*riveFile, i, viewModel->name(), storedDefaults);
                     if (!vmi)
                     {
                         std::cerr << "Warning: Failed to create ViewModel instance for: "

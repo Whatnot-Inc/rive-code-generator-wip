@@ -361,7 +361,6 @@ TypeDescriptor describeType(uint32_t typeKey)
         TYPE_DESC(CustomPropertyString, DataBindingViewModels);
         TYPE_DESC(CustomPropertyTrigger, DataBindingViewModels);
 
-        TYPE_DESC(Folder, AssetRefsMetadataContents);
         TYPE_DESC(ImageAsset, AssetRefsMetadataContents);
         TYPE_DESC(FontAsset, AssetRefsMetadataContents);
         TYPE_DESC(AudioAsset, AssetRefsMetadataContents);

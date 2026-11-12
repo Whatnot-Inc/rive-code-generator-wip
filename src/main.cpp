@@ -25,6 +25,7 @@ int main(int argc, char* argv[])
     Language language = Language::Dart;
     TemplateEngine templateEngine = TemplateEngine::Mustache;
     bool ignorePrivate = false;
+    bool storedDefaults = false;
 
     bool lintMode = false;
     bool statsMode = false;
@@ -62,6 +63,10 @@ int main(int argc, char* argv[])
     app.add_flag("--ignore-private",
                  ignorePrivate,
                  "Skip artboards, animations, state machines, and properties starting with 'internal', 'private', or '_'");
+
+    app.add_flag("--stored-defaults",
+                 storedDefaults,
+                 "Read view model defaults from the file's stored instance instead of a new, zero-valued one");
 
     app.add_flag("--lint",
                  lintMode,
@@ -129,7 +134,7 @@ int main(int argc, char* argv[])
 
     for (const auto& riv_file : riveFiles)
     {
-        auto result = processRiveFile(riv_file, ignorePrivate);
+        auto result = processRiveFile(riv_file, ignorePrivate, storedDefaults);
         if (result)
             riveFileDataList.push_back(*result);
     }
